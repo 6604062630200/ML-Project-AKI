@@ -274,7 +274,7 @@ with st.expander("🔧 Surgical Details"):
         st.session_state.data['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], st.session_state.data['Type_Op'])
         st.session_state.data['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, st.session_state.data['Dur_sx'])
     with col2:
-        st.session_state.data['Op_app'] = st.selectbox("Approach", [0, 1], st.session_state.data['Op_app'])
+        st.session_state.data['Op_app'] = st.selectbox("Operation Approach", [0, 1], st.session_state.data['Op_app'])
         st.session_state.data['Side_op'] = st.selectbox("Side", [0, 1, 2], st.session_state.data['Side_op'])
         st.session_state.data['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, st.session_state.data['Dur_anes'])
 
@@ -363,4 +363,5 @@ if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
             st.markdown(f"**Step 3:** จำแนกระดับสุดท้าย")
             st.markdown(f"- ตัดสินใจ: {'🔴 AKI Stage 3' if pred3 == 1 else '🔶 AKI Stage 2'}")
             st.markdown(f"- Probability: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]")
+
             st.markdown(f"- ความมั่นใจ: {prob3[pred3]:.2%}")

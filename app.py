@@ -194,6 +194,15 @@ def cascade_predict(input_data, model1, model2, model3, feature_names):
     
     return results
 
+# Initialize session state
+def init_session_state():
+    """Initialize all session state variables"""
+    if 'initialized' not in st.session_state:
+        default_data = get_demo_data()
+        for key, value in default_data.items():
+            st.session_state[key] = value
+        st.session_state.initialized = True
+
 # Main App
 st.title("🏥 AKI Prediction System (Cascade Model)")
 st.markdown("### Postoperative Acute Kidney Injury Prediction")
@@ -202,6 +211,9 @@ model1, model2, model3, feature_names = load_models()
 
 if model1 is None:
     st.stop()
+
+# Initialize session state
+init_session_state()
 
 # Sidebar controls
 st.sidebar.header("Controls")
@@ -215,142 +227,192 @@ sample_idx = st.sidebar.selectbox("เลือกตัวอย่างที
                                    format_func=lambda x: f"ตัวอย่างที่ {x+1}")
 
 if st.sidebar.button("📂 โหลดตัวอย่างจริง", use_container_width=True):
-    st.session_state.data = load_real_sample(aki_class, sample_idx)
-    st.session_state.true_label = aki_class  # เก็บเฉลยจริง
-    st.session_state.data_version = st.session_state.get('data_version', 0) + 1  # เพิ่ม version เพื่อ force update
+    real_data = load_real_sample(aki_class, sample_idx)
+    for key, value in real_data.items():
+        st.session_state[key] = value
+    st.session_state.true_label = aki_class
     st.sidebar.success(f"✅ โหลด: AKI Class {aki_class} (ตัวอย่างที่ {sample_idx+1})")
-    
-    # Debug: แสดงค่าบางตัว
-    st.sidebar.info(f"Age: {st.session_state.data['Age']}, PreCr: {st.session_state.data['PreCr']}, PreGFR: {st.session_state.data['PreGFR']}")
-    st.rerun()  # บังคับให้ refresh หน้าจอ
+    st.sidebar.info(f"Age: {st.session_state['Age']}, PreCr: {st.session_state['PreCr']}, PreGFR: {st.session_state['PreGFR']}")
+    st.rerun()
 
 st.sidebar.divider()
 
 if st.sidebar.button("🎲 สุ่มค่า", use_container_width=True):
-    st.session_state.data = randomize_data()
-    st.session_state.data_version = st.session_state.get('data_version', 0) + 1
+    random_data = randomize_data()
+    for key, value in random_data.items():
+        st.session_state[key] = value
     if 'true_label' in st.session_state:
-        del st.session_state.true_label  # ลบเฉลยออก
-    st.rerun()  # บังคับให้ refresh หน้าจอ
+        del st.session_state.true_label
+    st.rerun()
 
 if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_container_width=True):
-    st.session_state.data = get_demo_data()
-    st.session_state.data_version = st.session_state.get('data_version', 0) + 1
+    demo_data = get_demo_data()
+    for key, value in demo_data.items():
+        st.session_state[key] = value
     if 'true_label' in st.session_state:
-        del st.session_state.true_label  # ลบเฉลยออก
-    st.rerun()  # บังคับให้ refresh หน้าจอ
-
-# Initialize data
-if 'data' not in st.session_state:
-    st.session_state.data = get_demo_data()
-    st.session_state.data_version = 0
+        del st.session_state.true_label
+    st.rerun()
 
 # Input Form
 st.header("Patient Information")
 
 # คำนวณค่าที่ derive ได้อัตโนมัติ
-if st.session_state.data['BW'] > 0 and st.session_state.data['Height'] > 0:
-    st.session_state.data['BMI'] = st.session_state.data['BW'] / ((st.session_state.data['Height'] / 100) ** 2)
+if st.session_state['BW'] > 0 and st.session_state['Height'] > 0:
+    st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2)
     
-if st.session_state.data['LowestSBP'] > 0 and st.session_state.data['LowestDBP'] > 0:
-    st.session_state.data['Lowest MAP'] = st.session_state.data['LowestDBP'] + (1/3) * (st.session_state.data['LowestSBP'] - st.session_state.data['LowestDBP'])
+if st.session_state['LowestSBP'] > 0 and st.session_state['LowestDBP'] > 0:
+    st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP'])
     
-if st.session_state.data['Fluid_ml'] > 0:
-    st.session_state.data['fluid_balance'] = st.session_state.data['Fluid_ml'] - st.session_state.data['Bl_loss'] - st.session_state.data['Urine']
+if st.session_state['Fluid_ml'] > 0:
+    st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
 
 # แสดงข้อมูลสำคัญด้านบน
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Demographics")
-    st.session_state.data['Age'] = st.number_input("Age (years)", 0, 120, st.session_state.data['Age'], key='age_main')
-    st.session_state.data['Gender'] = st.selectbox("Gender", [0, 1], st.session_state.data['Gender'], format_func=lambda x: 'Female' if x == 0 else 'Male', key='gender_main')
-    st.session_state.data['BW'] = st.number_input("Body Weight (kg)", 0.0, 200.0, float(st.session_state.data['BW']), key='bw_main')
-    st.session_state.data['Height'] = st.number_input("Height (cm)", 0.0, 250.0, float(st.session_state.data['Height']), key='height_main')
-    st.metric("BMI (auto)", f"{st.session_state.data['BMI']:.2f}")
+    st.session_state['Age'] = st.number_input("Age (years)", 0, 120, st.session_state['Age'], key='age_input')
+    st.session_state['Gender'] = st.selectbox("Gender", [0, 1], st.session_state['Gender'], format_func=lambda x: 'Female' if x == 0 else 'Male', key='gender_input')
+    st.session_state['BW'] = st.number_input("Body Weight (kg)", 0.0, 200.0, float(st.session_state['BW']), key='bw_input')
+    st.session_state['Height'] = st.number_input("Height (cm)", 0.0, 250.0, float(st.session_state['Height']), key='height_input')
+    st.metric("BMI (auto)", f"{st.session_state['BMI']:.2f}")
 
 with col2:
     st.subheader("Comorbidities")
-    st.session_state.data['ASAgr'] = st.selectbox("ASA Grade", [0, 1, 2, 3], st.session_state.data['ASAgr'], key='asa_main')
-    st.session_state.data['HT'] = st.selectbox("Hypertension", [0, 1], st.session_state.data['HT'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='ht_main')
-    st.session_state.data['DM'] = st.selectbox("Diabetes", [0, 1], st.session_state.data['DM'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dm_main')
-    st.session_state.data['DLP'] = st.selectbox("Dyslipidemia", [0, 1], st.session_state.data['DLP'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dlp_main')
-    st.session_state.data['COPD'] = st.selectbox("COPD", [0, 1], st.session_state.data['COPD'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='copd_main')
+    st.session_state['ASAgr'] = st.selectbox("ASA Grade", [0, 1, 2, 3], st.session_state['ASAgr'], key='asa_input')
+    st.session_state['HT'] = st.selectbox("Hypertension", [0, 1], st.session_state['HT'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='ht_input')
+    st.session_state['DM'] = st.selectbox("Diabetes", [0, 1], st.session_state['DM'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dm_input')
+    st.session_state['DLP'] = st.selectbox("Dyslipidemia", [0, 1], st.session_state['DLP'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dlp_input')
+    st.session_state['COPD'] = st.selectbox("COPD", [0, 1], st.session_state['COPD'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='copd_input')
 
 with col3:
     st.subheader("Pre-op Labs")
-    st.session_state.data['Pre Hb'] = st.number_input("Pre Hb (g/dL)", 0.0, 20.0, float(st.session_state.data['Pre Hb']), key='prehb_main')
-    st.session_state.data['Alb'] = st.number_input("Albumin", 0.0, 10.0, float(st.session_state.data['Alb']), key='alb_main')
-    st.session_state.data['PreCr'] = st.number_input("Pre Creatinine", 0.0, 10.0, float(st.session_state.data['PreCr']), key='precr_main')
-    st.session_state.data['PreGFR'] = st.number_input("Pre GFR", 0, 200, st.session_state.data['PreGFR'], key='pregfr_main')
+    st.session_state['Pre Hb'] = st.number_input("Pre Hb (g/dL)", 0.0, 20.0, float(st.session_state['Pre Hb']), key='prehb_input')
+    st.session_state['Alb'] = st.number_input("Albumin", 0.0, 10.0, float(st.session_state['Alb']), key='alb_input')
+    st.session_state['PreCr'] = st.number_input("Pre Creatinine", 0.0, 10.0, float(st.session_state['PreCr']), key='precr_input')
+    st.session_state['PreGFR'] = st.number_input("Pre GFR", 0, 200, st.session_state['PreGFR'], key='pregfr_input')
 
 # แสดงฟีเจอร์ที่เหลือทั้งหมดใน expander
 with st.expander("🔧 ฟีเจอร์ทั้งหมด (50 features)", expanded=False):
     st.markdown("### ข้อมูลโรคประจำตัวและยา")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.data['CAD'] = st.selectbox("CAD", [0, 1], int(st.session_state.data['CAD']), key='cad')
-        st.session_state.data['CVD'] = st.selectbox("CVD", [0, 1], int(st.session_state.data['CVD']), key='cvd')
-        st.session_state.data['NSAIDs'] = st.selectbox("NSAIDs", [0, 1], int(st.session_state.data['NSAIDs']), key='nsaids')
+        st.session_state['CAD'] = st.selectbox("CAD", [0, 1], int(st.session_state['CAD']), key='cad_input')
+        st.session_state['CVD'] = st.selectbox("CVD", [0, 1], int(st.session_state['CVD']), key='cvd_input')
+        st.session_state['NSAIDs'] = st.selectbox("NSAIDs", [0, 1], int(st.session_state['NSAIDs']), key='nsaids_input')
     with col2:
-        st.session_state.data['ACEI'] = st.selectbox("ACEI", [0, 1], int(st.session_state.data['ACEI']), key='acei')
-        st.session_state.data['ARB'] = st.selectbox("ARB", [0, 1], int(st.session_state.data['ARB']), key='arb')
-        st.session_state.data['Statin'] = st.selectbox("Statin", [0, 1], int(st.session_state.data['Statin']), key='statin')
+        st.session_state['ACEI'] = st.selectbox("ACEI", [0, 1], int(st.session_state['ACEI']), key='acei_input')
+        st.session_state['ARB'] = st.selectbox("ARB", [0, 1], int(st.session_state['ARB']), key='arb_input')
+        st.session_state['Statin'] = st.selectbox("Statin", [0, 1], int(st.session_state['Statin']), key='statin_input')
     with col3:
-        st.session_state.data['Diuretics'] = st.selectbox("Diuretics", [0, 1], int(st.session_state.data['Diuretics']), key='diuretics')
-        st.session_state.data['Dx'] = st.selectbox("Diagnosis", [0, 1, 2], int(st.session_state.data['Dx']), key='dx')
-        st.session_state.data['NLR1'] = st.number_input("NLR1", 0.0, 100.0, float(st.session_state.data['NLR1']), key='nlr1')
+        st.session_state['Diuretics'] = st.selectbox("Diuretics", [0, 1], int(st.session_state['Diuretics']), key='diuretics_input')
+        st.session_state['Dx'] = st.selectbox("Diagnosis", [0, 1, 2], int(st.session_state['Dx']), key='dx_input')
+        st.session_state['NLR1'] = st.number_input("NLR1", 0.0, 100.0, float(st.session_state['NLR1']), key='nlr1_input')
     
     st.markdown("### ข้อมูลการผ่าตัด")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.data['Emer_surg'] = st.selectbox("Emergency Surgery", [0, 1], int(st.session_state.data['Emer_surg']), key='emer')
-        st.session_state.data['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], int(st.session_state.data['Type_Op']), key='typeop')
-        st.session_state.data['Op_app'] = st.selectbox("Approach", [0, 1], int(st.session_state.data['Op_app']), key='opapp')
-        st.session_state.data['Side_op'] = st.selectbox("Side", [0, 1, 2], int(st.session_state.data['Side_op']), key='sideop')
+        st.session_state['Emer_surg'] = st.selectbox("Emergency Surgery", [0, 1], int(st.session_state['Emer_surg']), key='emer_input')
+        st.session_state['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], int(st.session_state['Type_Op']), key='typeop_input')
+        st.session_state['Op_app'] = st.selectbox("Approach", [0, 1], int(st.session_state['Op_app']), key='opapp_input')
+        st.session_state['Side_op'] = st.selectbox("Side", [0, 1, 2], int(st.session_state['Side_op']), key='sideop_input')
     with col2:
-        st.session_state.data['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, int(st.session_state.data['Dur_anes']), key='duranes')
-        st.session_state.data['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, int(st.session_state.data['Dur_sx']), key='dursx')
-        st.session_state.data['One_lung'] = st.selectbox("One Lung", [0, 1], int(st.session_state.data['One_lung']), key='onelung')
-        st.session_state.data['Time_OL'] = st.number_input("Time OL (min)", 0, 500, int(st.session_state.data['Time_OL']), key='timeol')
+        st.session_state['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, int(st.session_state['Dur_anes']), key='duranes_input')
+        st.session_state['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, int(st.session_state['Dur_sx']), key='dursx_input')
+        st.session_state['One_lung'] = st.selectbox("One Lung", [0, 1], int(st.session_state['One_lung']), key='onelung_input')
+        st.session_state['Time_OL'] = st.number_input("Time OL (min)", 0, 500, int(st.session_state['Time_OL']), key='timeol_input')
     with col3:
-        st.session_state.data['Typ_Anal'] = st.selectbox("Type Analgesia", [0, 1], int(st.session_state.data['Typ_Anal']), key='typanal')
-        st.session_state.data['offETT'] = st.number_input("Off ETT (days)", 0, 30, int(st.session_state.data['offETT']), key='offett')
+        st.session_state['Typ_Anal'] = st.selectbox("Type Analgesia", [0, 1], int(st.session_state['Typ_Anal']), key='typanal_input')
+        st.session_state['offETT'] = st.number_input("Off ETT (days)", 0, 30, int(st.session_state['offETT']), key='offett_input')
     
     st.markdown("### ข้อมูลสารน้ำและเลือด")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.session_state.data['Fluid_ml'] = st.number_input("Total Fluid (mL)", 0, 10000, int(st.session_state.data['Fluid_ml']), key='fluid')
-        st.session_state.data['Crystalloid_ml'] = st.number_input("Crystalloid (mL)", 0, 10000, int(st.session_state.data['Crystalloid_ml']), key='cryst')
+        st.session_state['Fluid_ml'] = st.number_input("Total Fluid (mL)", 0, 10000, int(st.session_state['Fluid_ml']), key='fluid_input')
+        st.session_state['Crystalloid_ml'] = st.number_input("Crystalloid (mL)", 0, 10000, int(st.session_state['Crystalloid_ml']), key='cryst_input')
     with col2:
-        st.session_state.data['Total_HES_ml'] = st.number_input("Total HES (mL)", 0, 5000, int(st.session_state.data['Total_HES_ml']), key='hes')
-        st.session_state.data['Total_blood_ml'] = st.number_input("Total Blood (mL)", 0, 5000, int(st.session_state.data['Total_blood_ml']), key='blood')
+        st.session_state['Total_HES_ml'] = st.number_input("Total HES (mL)", 0, 5000, int(st.session_state['Total_HES_ml']), key='hes_input')
+        st.session_state['Total_blood_ml'] = st.number_input("Total Blood (mL)", 0, 5000, int(st.session_state['Total_blood_ml']), key='blood_input')
     with col3:
-        st.session_state.data['FFP_ml'] = st.number_input("FFP (mL)", 0, 5000, int(st.session_state.data['FFP_ml']), key='ffp')
-        st.session_state.data['Bl_loss'] = st.number_input("Blood Loss (mL)", 0, 5000, int(st.session_state.data['Bl_loss']), key='blloss')
+        st.session_state['FFP_ml'] = st.number_input("FFP (mL)", 0, 5000, int(st.session_state['FFP_ml']), key='ffp_input')
+        st.session_state['Bl_loss'] = st.number_input("Blood Loss (mL)", 0, 5000, int(st.session_state['Bl_loss']), key='blloss_input')
     with col4:
-        st.session_state.data['Urine'] = st.number_input("Urine Output (mL)", 0, 5000, int(st.session_state.data['Urine']), key='urine')
-        st.metric("Fluid Balance (auto)", f"{st.session_state.data['fluid_balance']:.0f} mL")
+        st.session_state['Urine'] = st.number_input("Urine Output (mL)", 0, 5000, int(st.session_state['Urine']), key='urine_input')
+        st.metric("Fluid Balance (auto)", f"{st.session_state['fluid_balance']:.0f} mL")
     
     st.markdown("### ข้อมูลยาและความดัน")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.data['Ephedrine'] = st.number_input("Ephedrine (mg)", 0, 100, int(st.session_state.data['Ephedrine']), key='ephed')
-        st.session_state.data['Levophed'] = st.number_input("Levophed (mcg)", 0, 5000, int(st.session_state.data['Levophed']), key='levo')
-        st.session_state.data['Hypotension'] = st.selectbox("Hypotension", [0, 1], int(st.session_state.data['Hypotension']), key='hypot')
+        st.session_state['Ephedrine'] = st.number_input("Ephedrine (mg)", 0, 100, int(st.session_state['Ephedrine']), key='ephed_input')
+        st.session_state['Levophed'] = st.number_input("Levophed (mcg)", 0, 5000, int(st.session_state['Levophed']), key='levo_input')
+        st.session_state['Hypotension'] = st.selectbox("Hypotension", [0, 1], int(st.session_state['Hypotension']), key='hypot_input')
     with col2:
-        st.session_state.data['Hypotension (mins)'] = st.number_input("Hypotension Duration (min)", 0, 500, int(st.session_state.data['Hypotension (mins)']), key='hypotmins')
-        st.session_state.data['LowestSBP'] = st.number_input("Lowest SBP", 0, 200, int(st.session_state.data['LowestSBP']), key='sbp')
-        st.session_state.data['LowestDBP'] = st.number_input("Lowest DBP", 0, 150, int(st.session_state.data['LowestDBP']), key='dbp')
+        st.session_state['Hypotension (mins)'] = st.number_input("Hypotension Duration (min)", 0, 500, int(st.session_state['Hypotension (mins)']), key='hypotmins_input')
+        st.session_state['LowestSBP'] = st.number_input("Lowest SBP", 0, 200, int(st.session_state['LowestSBP']), key='sbp_input')
+        st.session_state['LowestDBP'] = st.number_input("Lowest DBP", 0, 150, int(st.session_state['LowestDBP']), key='dbp_input')
     with col3:
-        st.metric("Lowest MAP (auto)", f"{st.session_state.data['Lowest MAP']:.2f}")
-        st.session_state.data['Hypoxemia'] = st.selectbox("Hypoxemia", [0, 1], int(st.session_state.data['Hypoxemia']), key='hypox')
-        st.session_state.data['Hypercarbia'] = st.selectbox("Hypercarbia", [0, 1], int(st.session_state.data['Hypercarbia']), key='hyperc')
+        st.metric("Lowest MAP (auto)", f"{st.session_state['Lowest MAP']:.2f}")
+        st.session_state['Hypoxemia'] = st.selectbox("Hypoxemia", [0, 1], int(st.session_state['Hypoxemia']), key='hypox_input')
+        st.session_state['Hypercarbia'] = st.selectbox("Hypercarbia", [0, 1], int(st.session_state['Hypercarbia']), key='hyperc_input')
 
 # Predict button
 if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
+    # รวบรวมข้อมูลจาก session_state
+    input_data = {
+        'Age': st.session_state['Age'],
+        'Gender': st.session_state['Gender'],
+        'ASAgr': st.session_state['ASAgr'],
+        'Emer_surg': st.session_state['Emer_surg'],
+        'BW': st.session_state['BW'],
+        'Height': st.session_state['Height'],
+        'BMI': st.session_state['BMI'],
+        'HT': st.session_state['HT'],
+        'DM': st.session_state['DM'],
+        'DLP': st.session_state['DLP'],
+        'COPD': st.session_state['COPD'],
+        'CAD': st.session_state['CAD'],
+        'CVD': st.session_state['CVD'],
+        'NSAIDs': st.session_state['NSAIDs'],
+        'ACEI': st.session_state['ACEI'],
+        'ARB': st.session_state['ARB'],
+        'Statin': st.session_state['Statin'],
+        'Diuretics': st.session_state['Diuretics'],
+        'Dx': st.session_state['Dx'],
+        'Type_Op': st.session_state['Type_Op'],
+        'Op_app': st.session_state['Op_app'],
+        'Side_op': st.session_state['Side_op'],
+        'Dur_anes': st.session_state['Dur_anes'],
+        'Dur_sx': st.session_state['Dur_sx'],
+        'One_lung': st.session_state['One_lung'],
+        'Time_OL': st.session_state['Time_OL'],
+        'Typ_Anal': st.session_state['Typ_Anal'],
+        'Fluid_ml': st.session_state['Fluid_ml'],
+        'Crystalloid_ml': st.session_state['Crystalloid_ml'],
+        'Total_HES_ml': st.session_state['Total_HES_ml'],
+        'Total_blood_ml': st.session_state['Total_blood_ml'],
+        'FFP_ml': st.session_state['FFP_ml'],
+        'Bl_loss': st.session_state['Bl_loss'],
+        'Urine': st.session_state['Urine'],
+        'fluid_balance': st.session_state['fluid_balance'],
+        'Ephedrine': st.session_state['Ephedrine'],
+        'Levophed': st.session_state['Levophed'],
+        'Hypotension': st.session_state['Hypotension'],
+        'Hypotension (mins)': st.session_state['Hypotension (mins)'],
+        'LowestSBP': st.session_state['LowestSBP'],
+        'LowestDBP': st.session_state['LowestDBP'],
+        'Lowest MAP': st.session_state['Lowest MAP'],
+        'Hypoxemia': st.session_state['Hypoxemia'],
+        'Hypercarbia': st.session_state['Hypercarbia'],
+        'Pre Hb': st.session_state['Pre Hb'],
+        'Alb': st.session_state['Alb'],
+        'PreCr': st.session_state['PreCr'],
+        'PreGFR': st.session_state['PreGFR'],
+        'offETT': st.session_state['offETT'],
+        'NLR1': st.session_state['NLR1']
+    }
+    
     with st.spinner("Predicting..."):
-        results = cascade_predict(st.session_state.data, model1, model2, model3, feature_names)
+        results = cascade_predict(input_data, model1, model2, model3, feature_names)
     
     # แสดงผลสุดท้ายก่อน (ที่สำคัญที่สุด)
     final_aki = results['final_aki']
@@ -422,4 +484,3 @@ if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
             st.markdown(f"- ตัดสินใจ: {'🔴 AKI Stage 3' if pred3 == 1 else '🔶 AKI Stage 2'}")
             st.markdown(f"- Probability: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]")
             st.markdown(f"- ความมั่นใจ: {prob3[pred3]:.2%}")
-

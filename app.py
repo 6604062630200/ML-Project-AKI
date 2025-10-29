@@ -221,6 +221,7 @@ if st.sidebar.button("📂 โหลดตัวอย่างจริง", us
     
     # Debug: แสดงค่าบางตัว
     st.sidebar.info(f"Age: {st.session_state.data['Age']}, PreCr: {st.session_state.data['PreCr']}, PreGFR: {st.session_state.data['PreGFR']}")
+    st.rerun()  # บังคับให้ refresh หน้าจอ
 
 st.sidebar.divider()
 
@@ -228,11 +229,13 @@ if st.sidebar.button("🎲 สุ่มค่า", use_container_width=True):
     st.session_state.data = randomize_data()
     if 'true_label' in st.session_state:
         del st.session_state.true_label  # ลบเฉลยออก
+    st.rerun()  # บังคับให้ refresh หน้าจอ
 
 if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_container_width=True):
     st.session_state.data = get_demo_data()
     if 'true_label' in st.session_state:
         del st.session_state.true_label  # ลบเฉลยออก
+    st.rerun()  # บังคับให้ refresh หน้าจอ
 
 # Initialize data
 if 'data' not in st.session_state:

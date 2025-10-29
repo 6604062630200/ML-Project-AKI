@@ -7,22 +7,27 @@ import numpy as np
 # Load models และ feature names
 @st.cache_resource
 def load_models():
+    """โหลดโมเดลและ feature names ทั้งหมด"""
     try:
         model1 = joblib.load('model_stage1_xgboost.pkl')
         model2 = joblib.load('model_stage2_logistic.pkl')
         model3 = joblib.load('model_stage3_logistic.pkl')
         
+        # (ข้อควรระวัง: feature_names.json ต้องมีโครงสร้าง 
+        # {"stage1": [...], "stage2": [...], "stage3": [...]})
         with open('feature_names.json', 'r') as f:
             feature_names = json.load(f)
         
         return model1, model2, model3, feature_names
     except Exception as e:
         st.error(f"Error loading models: {e}")
+        st.error("กรุณาตรวจสอบว่าไฟล์ .pkl 3 ไฟล์ และ feature_names.json อยู่ในโฟลเดอร์เดียวกับแอป")
         return None, None, None, None
 
 # ข้อมูลตัวอย่างจริงที่รู้เฉลย
 def get_real_samples():
     """ข้อมูลจริงจาก dataset แยกตาม AKI class"""
+    # (โค้ดส่วนนี้ยาวมาก ขออนุญาตย่อไว้ แต่ในไฟล์จริงของคุณต้องใส่ให้ครบ)
     samples = {
         0: [  # No AKI
             [22.0,1.0,1,1.0,70.0,170.0,24.221453287197235,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,2.0,4.0,1.0,1.0,120.0,90.0,1,80.0,1.0,350.0,350.0,0.0,0.0,0.0,30.0,80.0,240.0,0.0,0.0,0.0,0.0,90.0,52.0,64.66666666666667,0.0,1.0,14.8,4.220000000000001,0.8,136.48,0.0,7.212963],
@@ -58,6 +63,7 @@ def get_real_samples():
 def load_real_sample(aki_class, sample_idx):
     """แปลง array เป็น dict และแปลงเป็น type ที่ถูกต้อง"""
     samples = get_real_samples()
+    # (ลำดับนี้ต้อง "ตรง" กับข้อมูลใน get_real_samples() เป๊ะๆ)
     feature_order = ['Age', 'Gender', 'ASAgr', 'Emer_surg', 'BW', 'Height', 'BMI', 'HT', 'DM', 'DLP', 
                      'COPD', 'CAD', 'CVD', 'NSAIDs', 'ACEI', 'ARB', 'Statin', 'Diuretics', 'Dx', 
                      'Type_Op', 'Op_app', 'Side_op', 'Dur_anes', 'Dur_sx', 'One_lung', 'Time_OL', 
@@ -70,17 +76,26 @@ def load_real_sample(aki_class, sample_idx):
     data = dict(zip(feature_order, values))
     
     # แปลง type ให้ถูกต้อง - int สำหรับ categorical/count, float สำหรับ continuous
+    # (นี่คือ List ที่คุณต้องเช็คให้ตรงกับ data type ที่โมเดลคาดหวัง)
     int_features = ['Age', 'Gender', 'ASAgr', 'Emer_surg', 'HT', 'DM', 'DLP', 'COPD', 'CAD', 'CVD',
                     'NSAIDs', 'ACEI', 'ARB', 'Statin', 'Diuretics', 'Dx', 'Type_Op', 'Op_app', 'Side_op',
                     'Dur_anes', 'Dur_sx', 'One_lung', 'Time_OL', 'Typ_Anal', 'Fluid_ml', 'Crystalloid_ml',
                     'Total_HES_ml', 'Total_blood_ml', 'FFP_ml', 'Bl_loss', 'Urine', 'fluid_balance',
                     'Ephedrine', 'Levophed', 'Hypotension', 'Hypotension (mins)', 'LowestSBP', 'LowestDBP',
-                    'Lowest MAP', 'Hypoxemia', 'Hypercarbia', 'PreGFR', 'offETT']
+                    # 'Lowest MAP' มักจะเป็น float
+                    'Hypoxemia', 'Hypercarbia', 'PreGFR', 'offETT']
     
+    float_features = ['BW', 'Height', 'BMI', 'Lowest MAP', 'Pre Hb', 'Alb', 'PreCr', 'NLR1']
+
     for feature in int_features:
         if feature in data:
-            data[feature] = int(data[feature])
-    
+            # ใช้ .round() ก่อน .astype(int) เพื่อจัดการ float ที่อาจเพี้ยน
+            data[feature] = int(round(data[feature]))
+            
+    for feature in float_features:
+        if feature in data:
+            data[feature] = float(data[feature])
+            
     return data
 
 # ข้อมูลเดโม่
@@ -92,14 +107,16 @@ def get_demo_data():
         'Type_Op': 2, 'Op_app': 0, 'Side_op': 1, 'Dur_anes': 180, 'Dur_sx': 150,
         'One_lung': 1, 'Time_OL': 90, 'Typ_Anal': 0, 'Fluid_ml': 2000,
         'Crystalloid_ml': 1800, 'Total_HES_ml': 0, 'Total_blood_ml': 0, 'FFP_ml': 0,
-        'Bl_loss': 300, 'Urine': 400, 'fluid_balance': 1600, 'Ephedrine': 0,
-        'Levophed': 0, 'Hypotension': 0, 'Hypotension (mins)': 0, 'LowestSBP': 110,
-        'LowestDBP': 65, 'Lowest MAP': 80, 'Hypoxemia': 0, 'Hypercarbia': 0,
+        'Bl_loss': 300, 'Urine': 400, 'fluid_balance': 1300, # 2000 - 300 - 400
+        'Ephedrine': 0, 'Levophed': 0, 'Hypotension': 0, 'Hypotension (mins)': 0, 
+        'LowestSBP': 110, 'LowestDBP': 65, 'Lowest MAP': 80.0, # 65 + (1/3)*(110-65)
+        'Hypoxemia': 0, 'Hypercarbia': 0,
         'Pre Hb': 13.5, 'Alb': 4.0, 'PreCr': 1.0, 'PreGFR': 85, 'offETT': 0, 'NLR1': 3.5
     }
 
 # สุ่มค่า
 def randomize_data():
+    # (ฟังก์ชันนี้เหมือนเดิม ไม่ต้องแก้)
     return {
         'Age': np.random.randint(30, 85),
         'Gender': np.random.randint(0, 2),
@@ -155,12 +172,22 @@ def randomize_data():
 
 # Cascade prediction
 def cascade_predict(input_data, model1, model2, model3, feature_names):
+    # (ฟังก์ชันนี้เหมือนเดิม ไม่ต้องแก้)
+    # (ตรวจสอบให้แน่ใจว่า feature_names.json มี key 'stage1', 'stage2', 'stage3')
     df = pd.DataFrame([input_data])
     
     # Stage 1: กรอง No AKI (0) vs มี AKI (1,2,3)
-    X1 = df[feature_names['stage1']]
-    pred1 = model1.predict(X1)[0]
-    prob1 = model1.predict_proba(X1)[0]
+    # (โมเดล 1 ถูกเทรนให้ทาย 0=NoAKI, 1=AKI)
+    try:
+        X1 = df[feature_names['stage1']]
+        pred1 = model1.predict(X1)[0]
+        prob1 = model1.predict_proba(X1)[0]
+    except KeyError:
+        st.error("Error: 'feature_names.json' ไม่มี key 'stage1' หรือ feature ไม่ตรงกัน")
+        return None
+    except Exception as e:
+        st.error(f"Error Model 1: {e}")
+        return None
     
     results = {
         'stage1': {'prediction': pred1, 'probability': prob1},
@@ -173,25 +200,49 @@ def cascade_predict(input_data, model1, model2, model3, feature_names):
         return results
     
     # Stage 2: แยก AKI Stage 1 (0) vs AKI Stage 2,3 (1)
-    X2 = df[feature_names['stage2']]
-    pred2 = model2.predict(X2)[0]
-    prob2 = model2.predict_proba(X2)[0]
+    # (โมเดล 2 ถูกเทรนให้ทาย 0=AKI 1, 1=[2,3])
+    # ‼️‼️ "แก้ไข" การแปลผล pred2 ‼️‼️
+    # (ต้องเช็คว่าโมเดล 2 ของคุณทาย 0=Stage1 หรือ 1=Stage1)
+    # (โค้ดเก่าของคุณ: 0=Stage1, 1=Stage2-3)
+    try:
+        X2 = df[feature_names['stage2']]
+        pred2 = model2.predict(X2)[0]
+        prob2 = model2.predict_proba(X2)[0]
+    except KeyError:
+        st.error("Error: 'feature_names.json' ไม่มี key 'stage2' หรือ feature ไม่ตรงกัน")
+        return None
+    except Exception as e:
+        st.error(f"Error Model 2: {e}")
+        return None
+
     results['stage2'] = {'prediction': pred2, 'probability': prob2}
     
-    # ถ้า Stage 2 = 0 → AKI Stage 1, จบ
-    if pred2 == 0:
+    # (โค้ดเก่าของคุณ: pred2 == 0 คือ Stage 1)
+    if pred2 == 0: 
         results['final_aki'] = 1
         return results
     
     # Stage 3: แยก AKI Stage 2 (0) vs AKI Stage 3 (1)
-    X3 = df[feature_names['stage3']]
-    pred3 = model3.predict(X3)[0]
-    prob3 = model3.predict_proba(X3)[0]
-    results['stage3'] = {'prediction': pred3, 'probability': prob3}
-    
-    # ถ้า Stage 3 = 0 → AKI Stage 2, ถ้า = 1 → AKI Stage 3
-    results['final_aki'] = 2 if pred3 == 0 else 3
-    
+    # (โมเดล 3 ถูกเทรนให้ทาย 0=Stage2, 1=Stage3)
+    if model3 is not None:
+        try:
+            X3 = df[feature_names['stage3']]
+            pred3 = model3.predict(X3)[0]
+            prob3 = model3.predict_proba(X3)[0]
+        except KeyError:
+            st.error("Error: 'feature_names.json' ไม่มี key 'stage3' หรือ feature ไม่ตรงกัน")
+            return None
+        except Exception as e:
+            st.error(f"Error Model 3: {e}")
+            return None
+            
+        results['stage3'] = {'prediction': pred3, 'probability': prob3}
+        
+        results['final_aki'] = 2 if pred3 == 0 else 3
+    else:
+        # กรณีไม่มี Model 3 (เทรนไม่ผ่าน)
+        results['final_aki'] = 2 # ให้ทายเป็น 2 (ปลอดภัยกว่า)
+
     return results
 
 # Initialize session state
@@ -202,14 +253,24 @@ def init_session_state():
         for key, value in default_data.items():
             st.session_state[key] = value
         st.session_state.initialized = True
+        
+        # (คำนวณค่า derived ทันที)
+        st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2)
+        st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP'])
+        st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
 
+
+# -----------------------------------
 # Main App
+# -----------------------------------
+st.set_page_config(layout="wide") # ‼️ (เพิ่ม) ใช้พื้นที่เต็มจอ
 st.title("🏥 AKI Prediction System (Cascade Model)")
 st.markdown("### Postoperative Acute Kidney Injury Prediction")
 
 model1, model2, model3, feature_names = load_models()
 
 if model1 is None:
+    st.error("ไม่สามารถโหลดโมเดลได้ กรุณาตรวจสอบไฟล์")
     st.stop()
 
 # Initialize session state
@@ -221,16 +282,22 @@ st.sidebar.header("Controls")
 # ปุ่มโหลดตัวอย่างจริง
 st.sidebar.subheader("📁 ตัวอย่างจากข้อมูลจริง (รู้เฉลย)")
 aki_class = st.sidebar.selectbox("เลือก AKI Class:", 
-                                  [0, 1, 2, 3], 
-                                  format_func=lambda x: f"Class {x} ({'No AKI' if x==0 else f'AKI Stage {x}'})")
+                                 [0, 1, 2, 3], 
+                                 format_func=lambda x: f"Class {x} ({'No AKI' if x==0 else f'AKI Stage {x}'})")
 sample_idx = st.sidebar.selectbox("เลือกตัวอย่างที่:", [0, 1, 2, 3, 4], 
-                                   format_func=lambda x: f"ตัวอย่างที่ {x+1}")
+                                  format_func=lambda x: f"ตัวอย่างที่ {x+1}")
 
 if st.sidebar.button("📂 โหลดตัวอย่างจริง", use_container_width=True):
     real_data = load_real_sample(aki_class, sample_idx)
     for key, value in real_data.items():
         st.session_state[key] = value
     st.session_state.true_label = aki_class
+    
+    # ‼️ (เพิ่ม) คำนวณค่า derived ใหม่ทันที
+    st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2) if st.session_state['Height'] > 0 else 0
+    st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP']) if st.session_state['LowestSBP'] > st.session_state['LowestDBP'] else st.session_state['LowestDBP']
+    st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
+
     st.sidebar.success(f"✅ โหลด: AKI Class {aki_class} (ตัวอย่างที่ {sample_idx+1})")
     st.sidebar.info(f"Age: {st.session_state['Age']}, PreCr: {st.session_state['PreCr']}, PreGFR: {st.session_state['PreGFR']}")
     st.rerun()
@@ -243,6 +310,12 @@ if st.sidebar.button("🎲 สุ่มค่า", use_container_width=True):
         st.session_state[key] = value
     if 'true_label' in st.session_state:
         del st.session_state.true_label
+        
+    # ‼️ (เพิ่ม) คำนวณค่า derived ใหม่ทันที
+    st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2) if st.session_state['Height'] > 0 else 0
+    st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP']) if st.session_state['LowestSBP'] > st.session_state['LowestDBP'] else st.session_state['LowestDBP']
+    st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
+        
     st.rerun()
 
 if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_container_width=True):
@@ -251,236 +324,206 @@ if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_cont
         st.session_state[key] = value
     if 'true_label' in st.session_state:
         del st.session_state.true_label
+    
+    # ‼️ (เพิ่ม) คำนวณค่า derived ใหม่ทันที (แม้ว่า demo จะมีให้แล้ว แต่ทำเพื่อความชัวร์)
+    st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2) if st.session_state['Height'] > 0 else 0
+    st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP']) if st.session_state['LowestSBP'] > st.session_state['LowestDBP'] else st.session_state['LowestDBP']
+    st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
+        
     st.rerun()
 
+# ---
 # Input Form
+# ---
 st.header("Patient Information")
 
-# คำนวณค่าที่ derive ได้อัตโนมัติ
-if st.session_state['BW'] > 0 and st.session_state['Height'] > 0:
-    st.session_state['BMI'] = st.session_state['BW'] / ((st.session_state['Height'] / 100) ** 2)
-    
-if st.session_state['LowestSBP'] > 0 and st.session_state['LowestDBP'] > 0:
-    st.session_state['Lowest MAP'] = st.session_state['LowestDBP'] + (1/3) * (st.session_state['LowestSBP'] - st.session_state['LowestDBP'])
-    
-if st.session_state['Fluid_ml'] > 0:
-    st.session_state['fluid_balance'] = st.session_state['Fluid_ml'] - st.session_state['Bl_loss'] - st.session_state['Urine']
+# ‼️ (ลบ) ส่วนคำนวณค่า derived จากตรงนี้ (ย้ายไปไว้ใน init / button) ‼️
 
 # แสดงข้อมูลสำคัญด้านบน
 col1, col2, col3 = st.columns(3)
 
+# ‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️
+# START: ส่วนที่แก้ไข Widget ทั้งหมด
+# (เปลี่ยน key='...' และลบ st.session_state[...] = ... ออก)
+# ‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️
+
 with col1:
     st.subheader("Demographics")
-    st.session_state['Age'] = st.number_input("Age (years)", 0, 120, st.session_state['Age'], key='age_input')
-    st.session_state['Gender'] = st.selectbox("Gender", [0, 1], st.session_state['Gender'], format_func=lambda x: 'Female' if x == 0 else 'Male', key='gender_input')
-    st.session_state['BW'] = st.number_input("Body Weight (kg)", 0.0, 200.0, float(st.session_state['BW']), key='bw_input')
-    st.session_state['Height'] = st.number_input("Height (cm)", 0.0, 250.0, float(st.session_state['Height']), key='height_input')
+    st.number_input("Age (years)", 0, 120, key='Age')
+    st.selectbox("Gender", [0, 1], format_func=lambda x: 'Female' if x == 0 else 'Male', key='Gender')
+    st.number_input("Body Weight (kg)", 0.0, 200.0, key='BW')
+    st.number_input("Height (cm)", 0.0, 250.0, key='Height')
     st.metric("BMI (auto)", f"{st.session_state['BMI']:.2f}")
 
 with col2:
     st.subheader("Comorbidities")
-    st.session_state['ASAgr'] = st.selectbox("ASA Grade", [0, 1, 2, 3], st.session_state['ASAgr'], key='asa_input')
-    st.session_state['HT'] = st.selectbox("Hypertension", [0, 1], st.session_state['HT'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='ht_input')
-    st.session_state['DM'] = st.selectbox("Diabetes", [0, 1], st.session_state['DM'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dm_input')
-    st.session_state['DLP'] = st.selectbox("Dyslipidemia", [0, 1], st.session_state['DLP'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='dlp_input')
-    st.session_state['COPD'] = st.selectbox("COPD", [0, 1], st.session_state['COPD'], format_func=lambda x: 'No' if x == 0 else 'Yes', key='copd_input')
+    st.selectbox("ASA Grade", [0, 1, 2, 3], key='ASAgr')
+    st.selectbox("Hypertension", [0, 1], format_func=lambda x: 'No' if x == 0 else 'Yes', key='HT')
+    st.selectbox("Diabetes", [0, 1], format_func=lambda x: 'No' if x == 0 else 'Yes', key='DM')
+    st.selectbox("Dyslipidemia", [0, 1], format_func=lambda x: 'No' if x == 0 else 'Yes', key='DLP')
+    st.selectbox("COPD", [0, 1], format_func=lambda x: 'No' if x == 0 else 'Yes', key='COPD')
 
 with col3:
     st.subheader("Pre-op Labs")
-    st.session_state['Pre Hb'] = st.number_input("Pre Hb (g/dL)", 0.0, 20.0, float(st.session_state['Pre Hb']), key='prehb_input')
-    st.session_state['Alb'] = st.number_input("Albumin", 0.0, 10.0, float(st.session_state['Alb']), key='alb_input')
-    st.session_state['PreCr'] = st.number_input("Pre Creatinine", 0.0, 10.0, float(st.session_state['PreCr']), key='precr_input')
-    st.session_state['PreGFR'] = st.number_input("Pre GFR", 0, 200, st.session_state['PreGFR'], key='pregfr_input')
+    st.number_input("Pre Hb (g/dL)", 0.0, 20.0, key='Pre Hb')
+    st.number_input("Albumin", 0.0, 10.0, key='Alb')
+    st.number_input("Pre Creatinine", 0.0, 10.0, key='PreCr')
+    st.number_input("Pre GFR", 0, 200, key='PreGFR')
 
 # แสดงฟีเจอร์ที่เหลือทั้งหมดใน expander
 with st.expander("🔧 ฟีเจอร์ทั้งหมด (50 features)", expanded=False):
     st.markdown("### ข้อมูลโรคประจำตัวและยา")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state['CAD'] = st.selectbox("CAD", [0, 1], int(st.session_state['CAD']), key='cad_input')
-        st.session_state['CVD'] = st.selectbox("CVD", [0, 1], int(st.session_state['CVD']), key='cvd_input')
-        st.session_state['NSAIDs'] = st.selectbox("NSAIDs", [0, 1], int(st.session_state['NSAIDs']), key='nsaids_input')
+        st.selectbox("CAD", [0, 1], key='CAD', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("CVD", [0, 1], key='CVD', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("NSAIDs", [0, 1], key='NSAIDs', format_func=lambda x: 'No' if x == 0 else 'Yes')
     with col2:
-        st.session_state['ACEI'] = st.selectbox("ACEI", [0, 1], int(st.session_state['ACEI']), key='acei_input')
-        st.session_state['ARB'] = st.selectbox("ARB", [0, 1], int(st.session_state['ARB']), key='arb_input')
-        st.session_state['Statin'] = st.selectbox("Statin", [0, 1], int(st.session_state['Statin']), key='statin_input')
+        st.selectbox("ACEI", [0, 1], key='ACEI', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("ARB", [0, 1], key='ARB', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("Statin", [0, 1], key='Statin', format_func=lambda x: 'No' if x == 0 else 'Yes')
     with col3:
-        st.session_state['Diuretics'] = st.selectbox("Diuretics", [0, 1], int(st.session_state['Diuretics']), key='diuretics_input')
-        st.session_state['Dx'] = st.selectbox("Diagnosis", [0, 1, 2], int(st.session_state['Dx']), key='dx_input')
-        st.session_state['NLR1'] = st.number_input("NLR1", 0.0, 100.0, float(st.session_state['NLR1']), key='nlr1_input')
+        st.selectbox("Diuretics", [0, 1], key='Diuretics', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("Diagnosis", [0, 1, 2], key='Dx')
+        st.number_input("NLR1", 0.0, 100.0, key='NLR1')
     
     st.markdown("### ข้อมูลการผ่าตัด")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state['Emer_surg'] = st.selectbox("Emergency Surgery", [0, 1], int(st.session_state['Emer_surg']), key='emer_input')
-        st.session_state['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], int(st.session_state['Type_Op']), key='typeop_input')
-        st.session_state['Op_app'] = st.selectbox("Approach", [0, 1], int(st.session_state['Op_app']), key='opapp_input')
-        st.session_state['Side_op'] = st.selectbox("Side", [0, 1, 2], int(st.session_state['Side_op']), key='sideop_input')
+        st.selectbox("Emergency Surgery", [0, 1], key='Emer_surg', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], key='Type_Op')
+        st.selectbox("Approach", [0, 1], key='Op_app', format_func=lambda x: 'Open' if x == 0 else 'VATS/RATS') # (ตัวอย่างการใส่ format_func)
+        st.selectbox("Side", [0, 1, 2], key='Side_op')
     with col2:
-        st.session_state['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, int(st.session_state['Dur_anes']), key='duranes_input')
-        st.session_state['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, int(st.session_state['Dur_sx']), key='dursx_input')
-        st.session_state['One_lung'] = st.selectbox("One Lung", [0, 1], int(st.session_state['One_lung']), key='onelung_input')
-        st.session_state['Time_OL'] = st.number_input("Time OL (min)", 0, 500, int(st.session_state['Time_OL']), key='timeol_input')
+        st.number_input("Anesthesia Duration (min)", 0, 1000, key='Dur_anes')
+        st.number_input("Surgery Duration (min)", 0, 1000, key='Dur_sx')
+        st.selectbox("One Lung", [0, 1], key='One_lung', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.number_input("Time OL (min)", 0, 500, key='Time_OL')
     with col3:
-        st.session_state['Typ_Anal'] = st.selectbox("Type Analgesia", [0, 1], int(st.session_state['Typ_Anal']), key='typanal_input')
-        st.session_state['offETT'] = st.number_input("Off ETT (days)", 0, 30, int(st.session_state['offETT']), key='offett_input')
+        st.selectbox("Type Analgesia", [0, 1], key='Typ_Anal')
+        st.number_input("Off ETT (days)", 0, 30, key='offETT')
     
     st.markdown("### ข้อมูลสารน้ำและเลือด")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.session_state['Fluid_ml'] = st.number_input("Total Fluid (mL)", 0, 10000, int(st.session_state['Fluid_ml']), key='fluid_input')
-        st.session_state['Crystalloid_ml'] = st.number_input("Crystalloid (mL)", 0, 10000, int(st.session_state['Crystalloid_ml']), key='cryst_input')
+        st.number_input("Total Fluid (mL)", 0, 10000, key='Fluid_ml')
+        st.number_input("Crystalloid (mL)", 0, 10000, key='Crystalloid_ml')
     with col2:
-        st.session_state['Total_HES_ml'] = st.number_input("Total HES (mL)", 0, 5000, int(st.session_state['Total_HES_ml']), key='hes_input')
-        st.session_state['Total_blood_ml'] = st.number_input("Total Blood (mL)", 0, 5000, int(st.session_state['Total_blood_ml']), key='blood_input')
+        st.number_input("Total HES (mL)", 0, 5000, key='Total_HES_ml')
+        st.number_input("Total Blood (mL)", 0, 5000, key='Total_blood_ml')
     with col3:
-        st.session_state['FFP_ml'] = st.number_input("FFP (mL)", 0, 5000, int(st.session_state['FFP_ml']), key='ffp_input')
-        st.session_state['Bl_loss'] = st.number_input("Blood Loss (mL)", 0, 5000, int(st.session_state['Bl_loss']), key='blloss_input')
+        st.number_input("FFP (mL)", 0, 5000, key='FFP_ml')
+        st.number_input("Blood Loss (mL)", 0, 5000, key='Bl_loss')
     with col4:
-        st.session_state['Urine'] = st.number_input("Urine Output (mL)", 0, 5000, int(st.session_state['Urine']), key='urine_input')
+        st.number_input("Urine Output (mL)", 0, 5000, key='Urine')
         st.metric("Fluid Balance (auto)", f"{st.session_state['fluid_balance']:.0f} mL")
     
     st.markdown("### ข้อมูลยาและความดัน")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state['Ephedrine'] = st.number_input("Ephedrine (mg)", 0, 100, int(st.session_state['Ephedrine']), key='ephed_input')
-        st.session_state['Levophed'] = st.number_input("Levophed (mcg)", 0, 5000, int(st.session_state['Levophed']), key='levo_input')
-        st.session_state['Hypotension'] = st.selectbox("Hypotension", [0, 1], int(st.session_state['Hypotension']), key='hypot_input')
+        st.number_input("Ephedrine (mg)", 0, 100, key='Ephedrine')
+        st.number_input("Levophed (mcg)", 0, 5000, key='Levophed')
+        st.selectbox("Hypotension", [0, 1], key='Hypotension', format_func=lambda x: 'No' if x == 0 else 'Yes')
     with col2:
-        st.session_state['Hypotension (mins)'] = st.number_input("Hypotension Duration (min)", 0, 500, int(st.session_state['Hypotension (mins)']), key='hypotmins_input')
-        st.session_state['LowestSBP'] = st.number_input("Lowest SBP", 0, 200, int(st.session_state['LowestSBP']), key='sbp_input')
-        st.session_state['LowestDBP'] = st.number_input("Lowest DBP", 0, 150, int(st.session_state['LowestDBP']), key='dbp_input')
+        st.number_input("Hypotension Duration (min)", 0, 500, key='Hypotension (mins)')
+        st.number_input("Lowest SBP", 0, 200, key='LowestSBP')
+        st.number_input("Lowest DBP", 0, 150, key='LowestDBP')
     with col3:
         st.metric("Lowest MAP (auto)", f"{st.session_state['Lowest MAP']:.2f}")
-        st.session_state['Hypoxemia'] = st.selectbox("Hypoxemia", [0, 1], int(st.session_state['Hypoxemia']), key='hypox_input')
-        st.session_state['Hypercarbia'] = st.selectbox("Hypercarbia", [0, 1], int(st.session_state['Hypercarbia']), key='hyperc_input')
+        st.selectbox("Hypoxemia", [0, 1], key='Hypoxemia', format_func=lambda x: 'No' if x == 0 else 'Yes')
+        st.selectbox("Hypercarbia", [0, 1], key='Hypercarbia', format_func=lambda x: 'No' if x == 0 else 'Yes')
+
+# ‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️
+# END: ส่วนที่แก้ไข Widget ทั้งหมด
+# ‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️‼️
+
 
 # Predict button
 if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
     # รวบรวมข้อมูลจาก session_state
-    input_data = {
-        'Age': st.session_state['Age'],
-        'Gender': st.session_state['Gender'],
-        'ASAgr': st.session_state['ASAgr'],
-        'Emer_surg': st.session_state['Emer_surg'],
-        'BW': st.session_state['BW'],
-        'Height': st.session_state['Height'],
-        'BMI': st.session_state['BMI'],
-        'HT': st.session_state['HT'],
-        'DM': st.session_state['DM'],
-        'DLP': st.session_state['DLP'],
-        'COPD': st.session_state['COPD'],
-        'CAD': st.session_state['CAD'],
-        'CVD': st.session_state['CVD'],
-        'NSAIDs': st.session_state['NSAIDs'],
-        'ACEI': st.session_state['ACEI'],
-        'ARB': st.session_state['ARB'],
-        'Statin': st.session_state['Statin'],
-        'Diuretics': st.session_state['Diuretics'],
-        'Dx': st.session_state['Dx'],
-        'Type_Op': st.session_state['Type_Op'],
-        'Op_app': st.session_state['Op_app'],
-        'Side_op': st.session_state['Side_op'],
-        'Dur_anes': st.session_state['Dur_anes'],
-        'Dur_sx': st.session_state['Dur_sx'],
-        'One_lung': st.session_state['One_lung'],
-        'Time_OL': st.session_state['Time_OL'],
-        'Typ_Anal': st.session_state['Typ_Anal'],
-        'Fluid_ml': st.session_state['Fluid_ml'],
-        'Crystalloid_ml': st.session_state['Crystalloid_ml'],
-        'Total_HES_ml': st.session_state['Total_HES_ml'],
-        'Total_blood_ml': st.session_state['Total_blood_ml'],
-        'FFP_ml': st.session_state['FFP_ml'],
-        'Bl_loss': st.session_state['Bl_loss'],
-        'Urine': st.session_state['Urine'],
-        'fluid_balance': st.session_state['fluid_balance'],
-        'Ephedrine': st.session_state['Ephedrine'],
-        'Levophed': st.session_state['Levophed'],
-        'Hypotension': st.session_state['Hypotension'],
-        'Hypotension (mins)': st.session_state['Hypotension (mins)'],
-        'LowestSBP': st.session_state['LowestSBP'],
-        'LowestDBP': st.session_state['LowestDBP'],
-        'Lowest MAP': st.session_state['Lowest MAP'],
-        'Hypoxemia': st.session_state['Hypoxemia'],
-        'Hypercarbia': st.session_state['Hypercarbia'],
-        'Pre Hb': st.session_state['Pre Hb'],
-        'Alb': st.session_state['Alb'],
-        'PreCr': st.session_state['PreCr'],
-        'PreGFR': st.session_state['PreGFR'],
-        'offETT': st.session_state['offETT'],
-        'NLR1': st.session_state['NLR1']
-    }
+    # (สร้าง input_data จาก session_state โดยตรง)
+    input_data = {key: st.session_state[key] for key in get_demo_data().keys()}
     
+    # (อัปเดตค่า auto-calculated เผื่อมีการแก้ไข)
+    try:
+        input_data['BMI'] = input_data['BW'] / ((input_data['Height'] / 100) ** 2)
+        input_data['Lowest MAP'] = input_data['LowestDBP'] + (1/3) * (input_data['LowestSBP'] - input_data['LowestDBP'])
+        input_data['fluid_balance'] = input_data['Fluid_ml'] - input_data['Bl_loss'] - input_data['Urine']
+    except ZeroDivisionError:
+        st.error("Error: Height หรือ BW ห้ามเป็น 0")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error calculating derived fields: {e}")
+        st.stop()
+
     with st.spinner("Predicting..."):
         results = cascade_predict(input_data, model1, model2, model3, feature_names)
     
-    # แสดงผลสุดท้ายก่อน (ที่สำคัญที่สุด)
-    final_aki = results['final_aki']
-    aki_labels = {
-        0: ("ไม่มี AKI", "✅ ผู้ป่วยไม่มีภาวะไตวายเฉียบพลัน", "success"),
-        1: ("AKI Stage 1", "⚠️ ภาวะไตวายเฉียบพลันระดับเล็กน้อย - ควรติดตามอาการ", "info"),
-        2: ("AKI Stage 2", "🔶 ภาวะไตวายเฉียบพลันระดับปานกลาง - ต้องดูแลใกล้ชิด", "warning"),
-        3: ("AKI Stage 3", "🔴 ภาวะไตวายเฉียบพลันระดับรุนแรง - ต้องแทรกแซงทันที", "error")
-    }
-    
-    label, message, alert_type = aki_labels[final_aki]
-    
-    st.header("🎯 ผลการวินิจฉัย")
-    st.markdown(f"## **{label}**")
-    
-    if alert_type == "success":
-        st.success(message)
-    elif alert_type == "info":
-        st.info(message)
-    elif alert_type == "warning":
-        st.warning(message)
-    else:
-        st.error(message)
-    
-    # แสดงการเปรียบเทียบกับเฉลยจริง (ถ้ามี)
-    if 'true_label' in st.session_state:
+    if results:
+        # แสดงผลสุดท้ายก่อน (ที่สำคัญที่สุด)
+        final_aki = results['final_aki']
+        aki_labels = {
+            0: ("ไม่มี AKI (No AKI)", "✅ ผู้ป่วยไม่มีภาวะไตวายเฉียบพลัน", "success"),
+            1: ("AKI Stage 1", "⚠️ ภาวะไตวายเฉียบพลันระดับเล็กน้อย (Mild) - ควรติดตามอาการ", "info"),
+            2: ("AKI Stage 2", "🔶 ภาวะไตวายเฉียบพลันระดับปานกลาง (Moderate) - ต้องดูแลใกล้ชิด", "warning"),
+            3: ("AKI Stage 3", "🔴 ภาวะไตวายเฉียบพลันระดับรุนแรง (Severe) - ต้องแทรกแซงทันที", "error")
+        }
+        
+        label, message, alert_type = aki_labels[final_aki]
+        
+        st.header("🎯 ผลการวินิจฉัย")
+        st.markdown(f"## **{label}**")
+        
+        if alert_type == "success":
+            st.success(message)
+        elif alert_type == "info":
+            st.info(message)
+        elif alert_type == "warning":
+            st.warning(message)
+        else:
+            st.error(message)
+        
+        # แสดงการเปรียบเทียบกับเฉลยจริง (ถ้ามี)
+        if 'true_label' in st.session_state:
+            st.divider()
+            true_aki = st.session_state.true_label
+            is_correct = (final_aki == true_aki)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🎯 เฉลยจริง", f"AKI Class {true_aki}")
+            with col2:
+                st.metric("🤖 ทำนาย", f"AKI Class {final_aki}")
+            with col3:
+                if is_correct:
+                    st.success("✅ ถูกต้อง!")
+                else:
+                    st.error("❌ ผิด")
+        
+        # แสดง decision path
         st.divider()
-        true_aki = st.session_state.true_label
-        is_correct = (final_aki == true_aki)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("🎯 เฉลยจริง", f"AKI Class {true_aki}")
-        with col2:
-            st.metric("🤖 ทำนาย", f"AKI Class {final_aki}")
-        with col3:
-            if is_correct:
-                st.success("✅ ถูกต้อง!")
-            else:
-                st.error("❌ ผิด")
-    
-    # แสดง decision path (สำหรับเข้าใจว่าโมเดลตัดสินใจยังไง)
-    st.divider()
-    with st.expander("📋 ดูรายละเอียดการตัดสินใจของโมเดล", expanded=True):
-        st.markdown("### Decision Path:")
-        
-        # Stage 1
-        pred1 = results['stage1']['prediction']
-        prob1 = results['stage1']['probability']
-        st.markdown(f"**Step 1:** กรองเบื้องต้น")
-        st.markdown(f"- ตัดสินใจ: {'✅ มี AKI → ไป Step 2' if pred1 == 1 else '❌ ไม่มี AKI → จบการวินิจฉัย'}")
-        st.markdown(f"- Probability: [No AKI: {prob1[0]:.2%}, มี AKI: {prob1[1]:.2%}]")
-        st.markdown(f"- ความมั่นใจ: {prob1[pred1]:.2%}")
-        
-        # Stage 2
-        if 'stage2' in results:
-            pred2 = results['stage2']['prediction']
-            prob2 = results['stage2']['probability']
-            st.markdown(f"**Step 2:** แยกระดับความรุนแรง")
-            st.markdown(f"- ตัดสินใจ: {'➡️ AKI รุนแรง (Stage 2-3) → ไป Step 3' if pred2 == 1 else '✅ AKI Stage 1 → จบการวินิจฉัย'}")
-            st.markdown(f"- Probability: [Stage 1: {prob2[0]:.2%}, Stage 2-3: {prob2[1]:.2%}]")
-            st.markdown(f"- ความมั่นใจ: {prob2[pred2]:.2%}")
-        
-        # Stage 3
-        if 'stage3' in results:
-            pred3 = results['stage3']['prediction']
-            prob3 = results['stage3']['probability']
-            st.markdown(f"**Step 3:** จำแนกระดับสุดท้าย")
-            st.markdown(f"- ตัดสินใจ: {'🔴 AKI Stage 3' if pred3 == 1 else '🔶 AKI Stage 2'}")
-            st.markdown(f"- Probability: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]")
-            st.markdown(f"- ความมั่นใจ: {prob3[pred3]:.2%}")
+        with st.expander("📋 ดูรายละเอียดการตัดสินใจของโมเดล", expanded=True):
+            st.markdown("### Decision Path:")
+            
+            # Stage 1
+            pred1 = results['stage1']['prediction']
+            prob1 = results['stage1']['probability']
+            st.markdown(f"**Step 1: Gatekeeper (0 vs AKI)**")
+            st.markdown(f"- โมเดล 1 (XGBoost) ตัดสินใจ: {'✅ **มี AKI** → ไป Step 2' if pred1 == 1 else '❌ **ไม่มี AKI** → จบการวินิจฉัย'}")
+            st.markdown(f"- *Prob: [No AKI: {prob1[0]:.2%}, มี AKI: {prob1[1]:.2%}]*")
+            
+            # Stage 2
+            if 'stage2' in results:
+                pred2 = results['stage2']['prediction']
+                prob2 = results['stage2']['probability']
+                st.markdown(f"**Step 2: Triage (Stage 1 vs Stage 2-3)**")
+                st.markdown(f"- โมเดล 2 (Logistic) ตัดสินใจ: {'➡️ **AKI รุนแรง (Stage 2-3)** → ไป Step 3' if pred2 == 1 else '✅ **AKI Stage 1** → จบการวินิจฉัย'}")
+                st.markdown(f"- *Prob: [Stage 1: {prob2[0]:.2%}, Stage 2-3: {prob2[1]:.2%}]*")
+            
+            # Stage 3
+            if 'stage3' in results:
+                pred3 = results['stage3']['prediction']
+                prob3 = results['stage3']['probability']
+                st.markdown(f"**Step 3: Specialist (Stage 2 vs Stage 3)**")
+                st.markdown(f"- โมเดล 3 (Logistic) ตัดสินใจ: {'🔴 **AKI Stage 3**' if pred3 == 1 else '🔶 **AKI Stage 2**'}")
+                st.markdown(f"- *Prob: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]*")

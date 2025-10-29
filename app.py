@@ -217,6 +217,7 @@ sample_idx = st.sidebar.selectbox("เลือกตัวอย่างที
 if st.sidebar.button("📂 โหลดตัวอย่างจริง", use_container_width=True):
     st.session_state.data = load_real_sample(aki_class, sample_idx)
     st.session_state.true_label = aki_class  # เก็บเฉลยจริง
+    st.session_state.data_version = st.session_state.get('data_version', 0) + 1  # เพิ่ม version เพื่อ force update
     st.sidebar.success(f"✅ โหลด: AKI Class {aki_class} (ตัวอย่างที่ {sample_idx+1})")
     
     # Debug: แสดงค่าบางตัว
@@ -227,12 +228,14 @@ st.sidebar.divider()
 
 if st.sidebar.button("🎲 สุ่มค่า", use_container_width=True):
     st.session_state.data = randomize_data()
+    st.session_state.data_version = st.session_state.get('data_version', 0) + 1
     if 'true_label' in st.session_state:
         del st.session_state.true_label  # ลบเฉลยออก
     st.rerun()  # บังคับให้ refresh หน้าจอ
 
 if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_container_width=True):
     st.session_state.data = get_demo_data()
+    st.session_state.data_version = st.session_state.get('data_version', 0) + 1
     if 'true_label' in st.session_state:
         del st.session_state.true_label  # ลบเฉลยออก
     st.rerun()  # บังคับให้ refresh หน้าจอ
@@ -240,6 +243,7 @@ if st.sidebar.button("📋 ใช้ข้อมูลเดโม่", use_cont
 # Initialize data
 if 'data' not in st.session_state:
     st.session_state.data = get_demo_data()
+    st.session_state.data_version = 0
 
 # Input Form
 st.header("Patient Information")
@@ -418,3 +422,4 @@ if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
             st.markdown(f"- ตัดสินใจ: {'🔴 AKI Stage 3' if pred3 == 1 else '🔶 AKI Stage 2'}")
             st.markdown(f"- Probability: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]")
             st.markdown(f"- ความมั่นใจ: {prob3[pred3]:.2%}")
+

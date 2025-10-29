@@ -241,6 +241,7 @@ if 'data' not in st.session_state:
 # Input Form
 st.header("Patient Information")
 
+# แสดงข้อมูลสำคัญด้านบน
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -266,28 +267,68 @@ with col3:
     st.session_state.data['PreCr'] = st.number_input("Pre Creatinine", 0.0, 10.0, float(st.session_state.data['PreCr']))
     st.session_state.data['PreGFR'] = st.number_input("Pre GFR", 0, 200, st.session_state.data['PreGFR'])
 
-# Expandable sections for other features
-with st.expander("🔧 Surgical Details"):
-    col1, col2 = st.columns(2)
+# แสดงฟีเจอร์ที่เหลือทั้งหมดใน expander
+with st.expander("🔧 ฟีเจอร์ทั้งหมด (50 features)", expanded=False):
+    st.markdown("### ข้อมูลโรคประจำตัวและยา")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.data['Emer_surg'] = st.selectbox("Emergency Surgery", [0, 1], st.session_state.data['Emer_surg'])
-        st.session_state.data['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], st.session_state.data['Type_Op'])
-        st.session_state.data['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, st.session_state.data['Dur_sx'])
+        st.session_state.data['CAD'] = st.selectbox("CAD", [0, 1], st.session_state.data['CAD'], key='cad')
+        st.session_state.data['CVD'] = st.selectbox("CVD", [0, 1], st.session_state.data['CVD'], key='cvd')
+        st.session_state.data['NSAIDs'] = st.selectbox("NSAIDs", [0, 1], st.session_state.data['NSAIDs'], key='nsaids')
     with col2:
-        st.session_state.data['Op_app'] = st.selectbox("Operation Approach", [0, 1], st.session_state.data['Op_app'])
-        st.session_state.data['Side_op'] = st.selectbox("Side", [0, 1, 2], st.session_state.data['Side_op'])
-        st.session_state.data['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, st.session_state.data['Dur_anes'])
-
-with st.expander("💉 Intraoperative Data"):
-    col1, col2 = st.columns(2)
+        st.session_state.data['ACEI'] = st.selectbox("ACEI", [0, 1], st.session_state.data['ACEI'], key='acei')
+        st.session_state.data['ARB'] = st.selectbox("ARB", [0, 1], st.session_state.data['ARB'], key='arb')
+        st.session_state.data['Statin'] = st.selectbox("Statin", [0, 1], st.session_state.data['Statin'], key='statin')
+    with col3:
+        st.session_state.data['Diuretics'] = st.selectbox("Diuretics", [0, 1], st.session_state.data['Diuretics'], key='diuretics')
+        st.session_state.data['Dx'] = st.selectbox("Diagnosis", [0, 1, 2], st.session_state.data['Dx'], key='dx')
+        st.session_state.data['NLR1'] = st.number_input("NLR1", 0.0, 100.0, float(st.session_state.data['NLR1']), key='nlr1')
+    
+    st.markdown("### ข้อมูลการผ่าตัด")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.data['Fluid_ml'] = st.number_input("Total Fluid (mL)", 0, 10000, st.session_state.data['Fluid_ml'])
-        st.session_state.data['Bl_loss'] = st.number_input("Blood Loss (mL)", 0, 5000, st.session_state.data['Bl_loss'])
-        st.session_state.data['LowestSBP'] = st.number_input("Lowest SBP", 0, 200, st.session_state.data['LowestSBP'])
+        st.session_state.data['Emer_surg'] = st.selectbox("Emergency Surgery", [0, 1], st.session_state.data['Emer_surg'], key='emer')
+        st.session_state.data['Type_Op'] = st.selectbox("Operation Type", [0, 1, 2, 3, 4, 5], st.session_state.data['Type_Op'], key='typeop')
+        st.session_state.data['Op_app'] = st.selectbox("Approach", [0, 1], st.session_state.data['Op_app'], key='opapp')
+        st.session_state.data['Side_op'] = st.selectbox("Side", [0, 1, 2], st.session_state.data['Side_op'], key='sideop')
     with col2:
-        st.session_state.data['Urine'] = st.number_input("Urine Output (mL)", 0, 5000, st.session_state.data['Urine'])
-        st.session_state.data['Hypotension'] = st.selectbox("Hypotension", [0, 1], st.session_state.data['Hypotension'])
-        st.session_state.data['Lowest MAP'] = st.number_input("Lowest MAP", 0, 200, st.session_state.data['Lowest MAP'])
+        st.session_state.data['Dur_anes'] = st.number_input("Anesthesia Duration (min)", 0, 600, st.session_state.data['Dur_anes'], key='duranes')
+        st.session_state.data['Dur_sx'] = st.number_input("Surgery Duration (min)", 0, 600, st.session_state.data['Dur_sx'], key='dursx')
+        st.session_state.data['One_lung'] = st.selectbox("One Lung", [0, 1], st.session_state.data['One_lung'], key='onelung')
+        st.session_state.data['Time_OL'] = st.number_input("Time OL (min)", 0, 500, st.session_state.data['Time_OL'], key='timeol')
+    with col3:
+        st.session_state.data['Typ_Anal'] = st.selectbox("Type Analgesia", [0, 1], st.session_state.data['Typ_Anal'], key='typanal')
+        st.session_state.data['offETT'] = st.number_input("Off ETT (days)", 0, 30, st.session_state.data['offETT'], key='offett')
+    
+    st.markdown("### ข้อมูลสารน้ำและเลือด")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.session_state.data['Fluid_ml'] = st.number_input("Total Fluid (mL)", 0, 10000, st.session_state.data['Fluid_ml'], key='fluid')
+        st.session_state.data['Crystalloid_ml'] = st.number_input("Crystalloid (mL)", 0, 10000, st.session_state.data['Crystalloid_ml'], key='cryst')
+    with col2:
+        st.session_state.data['Total_HES_ml'] = st.number_input("Total HES (mL)", 0, 5000, st.session_state.data['Total_HES_ml'], key='hes')
+        st.session_state.data['Total_blood_ml'] = st.number_input("Total Blood (mL)", 0, 5000, st.session_state.data['Total_blood_ml'], key='blood')
+    with col3:
+        st.session_state.data['FFP_ml'] = st.number_input("FFP (mL)", 0, 5000, st.session_state.data['FFP_ml'], key='ffp')
+        st.session_state.data['Bl_loss'] = st.number_input("Blood Loss (mL)", 0, 5000, st.session_state.data['Bl_loss'], key='blloss')
+    with col4:
+        st.session_state.data['Urine'] = st.number_input("Urine Output (mL)", 0, 5000, st.session_state.data['Urine'], key='urine')
+        st.session_state.data['fluid_balance'] = st.number_input("Fluid Balance (mL)", -5000, 10000, st.session_state.data['fluid_balance'], key='fluidbal')
+    
+    st.markdown("### ข้อมูลยาและความดัน")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.session_state.data['Ephedrine'] = st.number_input("Ephedrine (mg)", 0, 100, st.session_state.data['Ephedrine'], key='ephed')
+        st.session_state.data['Levophed'] = st.number_input("Levophed (mcg)", 0, 5000, st.session_state.data['Levophed'], key='levo')
+        st.session_state.data['Hypotension'] = st.selectbox("Hypotension", [0, 1], st.session_state.data['Hypotension'], key='hypot')
+    with col2:
+        st.session_state.data['Hypotension (mins)'] = st.number_input("Hypotension Duration (min)", 0, 500, st.session_state.data['Hypotension (mins)'], key='hypotmins')
+        st.session_state.data['LowestSBP'] = st.number_input("Lowest SBP", 0, 200, st.session_state.data['LowestSBP'], key='sbp')
+        st.session_state.data['LowestDBP'] = st.number_input("Lowest DBP", 0, 150, st.session_state.data['LowestDBP'], key='dbp')
+    with col3:
+        st.session_state.data['Lowest MAP'] = st.number_input("Lowest MAP", 0, 200, st.session_state.data['Lowest MAP'], key='map')
+        st.session_state.data['Hypoxemia'] = st.selectbox("Hypoxemia", [0, 1], st.session_state.data['Hypoxemia'], key='hypox')
+        st.session_state.data['Hypercarbia'] = st.selectbox("Hypercarbia", [0, 1], st.session_state.data['Hypercarbia'], key='hyperc')
 
 # Predict button
 if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
@@ -363,5 +404,4 @@ if st.button("🔮 Predict AKI Risk", use_container_width=True, type="primary"):
             st.markdown(f"**Step 3:** จำแนกระดับสุดท้าย")
             st.markdown(f"- ตัดสินใจ: {'🔴 AKI Stage 3' if pred3 == 1 else '🔶 AKI Stage 2'}")
             st.markdown(f"- Probability: [Stage 2: {prob3[0]:.2%}, Stage 3: {prob3[1]:.2%}]")
-
             st.markdown(f"- ความมั่นใจ: {prob3[pred3]:.2%}")
